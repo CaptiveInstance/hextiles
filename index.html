@@ -1,0 +1,232 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Hexia</title>
+<style>
+  :root {
+    --bg: #f6f3ec;
+    --ink: #4a4a44;
+    --muted: #8c8a80;
+    --empty: #eae6da;
+    --empty-edge: #d9d3c3;
+    --gold: #e3b34c;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { touch-action: manipulation; }
+  @media (max-width: 600px) {
+    h1 { font-size: 22px; letter-spacing: 7px; }
+    #rotate, #new-game { padding: 12px 24px; font-size: 15px; }
+  }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-height: 100vh;
+    padding: 24px 16px;
+  }
+  h1 {
+    font-size: 28px;
+    letter-spacing: 10px;
+    font-weight: 600;
+    margin: 0 0 2px;
+    text-transform: uppercase;
+  }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+
+  .panel {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    margin-bottom: 6px;
+  }
+  .card {
+    display: flex;
+    align-items: center;
+    gap: 9px;
+    padding: 7px 14px;
+    border-radius: 12px;
+    border: 2px solid transparent;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0,0,0,.07);
+    transition: border-color .2s, transform .2s;
+  }
+  .card.active { border-color: var(--gold); transform: scale(1.05); }
+  .card .swatch { width: 30px; height: 30px; }
+  .card .swatch svg { width: 100%; height: 100%; display: block; }
+  .card .name { font-size: 13px; font-weight: 600; }
+  .card .left { font-size: 10.5px; color: var(--muted); }
+  .card .score { font-size: 21px; font-weight: 700; min-width: 22px; text-align: center; }
+
+  #status {
+    height: 28px;
+    font-size: 14px;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+  }
+  #status.game-over { color: var(--ink); font-weight: 700; font-size: 17px; }
+
+  #tray {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 4px 0 8px;
+    padding: 6px 14px;
+    background: #fff;
+    border-radius: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,.07);
+  }
+  .tray-label { font-size: 12px; color: var(--muted); font-weight: 600; }
+  #next-tile { width: 46px; height: 46px; cursor: pointer; }
+  #next-tile svg { width: 100%; height: 100%; display: block; }
+  #rotate {
+    padding: 6px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    background: var(--bg);
+    border: 2px solid var(--empty-edge);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  #rotate:hover { border-color: var(--gold); }
+
+  #board { width: min(560px, 94vw); }
+
+  .cell .base {
+    fill: var(--empty);
+    stroke: var(--empty-edge);
+    stroke-width: 1.5;
+    transition: fill .15s;
+  }
+  .cell:hover .base { fill: #e2ddcd; cursor: pointer; }
+
+  .ghost { opacity: .45; pointer-events: none; }
+  .tile { pointer-events: none; }
+
+  .pop { animation: pop .25s ease-out; transform-box: fill-box; transform-origin: center; }
+  @keyframes pop {
+    from { transform: scale(.6); }
+    60%  { transform: scale(1.08); }
+    to   { transform: scale(1); }
+  }
+
+  .tri-flash {
+    fill: rgba(227, 179, 76, .3);
+    stroke: var(--gold);
+    stroke-width: 3.5;
+    stroke-linejoin: round;
+    animation: triFade 1.5s ease-out forwards;
+  }
+  @keyframes triFade {
+    0%   { opacity: 0; }
+    15%  { opacity: 1; }
+    70%  { opacity: 1; }
+    100% { opacity: 0; }
+  }
+
+  .float-score {
+    font-size: 23px;
+    font-weight: 800;
+    font-family: inherit;
+    paint-order: stroke;
+    stroke: #fff;
+    stroke-width: 4px;
+    animation: rise 1.5s ease-out forwards;
+  }
+  @keyframes rise {
+    from { opacity: 1; transform: translateY(0); }
+    to   { opacity: 0; transform: translateY(-30px); }
+  }
+
+  .controls {
+    display: flex;
+    align-items: center;
+    gap: 18px;
+    margin-top: 16px;
+  }
+  #ai-label, #ai-first-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    cursor: pointer;
+    user-select: none;
+  }
+  #ai-label input, #ai-first-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+  #new-game {
+    padding: 9px 26px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--ink);
+    background: #fff;
+    border: 2px solid var(--empty-edge);
+    border-radius: 999px;
+    cursor: pointer;
+    transition: border-color .15s;
+  }
+  #new-game:hover { border-color: var(--gold); }
+
+  .rules {
+    margin-top: 18px;
+    max-width: 440px;
+    font-size: 12.5px;
+    color: var(--muted);
+    text-align: center;
+    line-height: 1.5;
+  }
+</style>
+</head>
+<body>
+  <h1>Hexia</h1>
+  <div class="subtitle">place more pieces than your opponent &middot; <a href="garden.html" style="color:inherit">garden mode</a></div>
+
+  <div class="panel">
+    <div class="card" id="card-0">
+      <div class="swatch" id="swatch-0"></div>
+      <div><div class="name" id="name-0"></div><div class="left" id="left-0"></div></div>
+      <div class="score" id="score-0">0</div>
+    </div>
+    <div class="card" id="card-1">
+      <div class="swatch" id="swatch-1"></div>
+      <div><div class="name" id="name-1"></div><div class="left" id="left-1"></div></div>
+      <div class="score" id="score-1">0</div>
+    </div>
+  </div>
+
+  <div id="status"></div>
+  <div id="tray">
+    <span class="tray-label">Next piece</span>
+    <div id="next-tile" title="Click to rotate"></div>
+    <button id="rotate">&#10227; Rotate &mdash; R</button>
+  </div>
+  <div id="board"></div>
+  <div class="controls">
+    <button id="new-game">New game</button>
+    <label id="ai-label"><input type="checkbox" id="ai-toggle"> Play against Claude</label>
+    <label id="ai-first-label"><input type="checkbox" id="ai-first"> Claude goes first</label>
+  </div>
+
+  <p class="rules">
+    The piece is a triangle of three hexagons. Take turns placing pieces on
+    empty cells &mdash; hover to preview, press <strong>R</strong> (or the
+    rotate button) to pivot the piece, click to place. On a phone: tap once to
+    preview, tap again to place. When no piece fits anywhere, the game ends:
+    <strong>whoever placed more pieces wins</strong>. Squeeze your pieces in,
+    and waste space so your opponent can't.
+  </p>
+
+  <script src="engine.js"></script>
+  <script src="ai.js"></script>
+  <script src="ui.js"></script>
+</body>
+</html>
