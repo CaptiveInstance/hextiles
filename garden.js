@@ -201,6 +201,27 @@
     }
   }
 
+  // ---- tutorial illustrations (used by index.html) ------------------------
+  window.HexafoilArt = function (container, specs) {
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (const sp of specs) {
+      for (const [q, r] of sp.cells) {
+        const c = center(q, r);
+        minX = Math.min(minX, c.x - SIZE * 1.05); maxX = Math.max(maxX, c.x + SIZE * 1.05);
+        minY = Math.min(minY, c.y - SIZE * 1.05); maxY = Math.max(maxY, c.y + SIZE * 1.05);
+      }
+    }
+    const s = el("svg", {
+      viewBox: [minX, minY, maxX - minX, maxY - minY].map(v => v.toFixed(0)).join(" "),
+    }, container);
+    for (const sp of specs) {
+      const col = COLORS[sp.player];
+      const g = pieceGroup(sp.cells, col.fill, col.edge);
+      if (sp.ghost) g.setAttribute("opacity", "0.45");
+      s.appendChild(g);
+    }
+  };
+
   function pieceGroup(cells, fill, edge) {
     const g = el("g", { class: "piece" });
     const ctrs = cells.map(([q, r]) => center(q, r));
@@ -433,7 +454,7 @@
     if (busy) {
       status.textContent = "Claude is placing…";
     } else if (withClaude) {
-      status.textContent = "Your turn — piece #" + (placedBy[0] + 1);
+      status.textContent = "Your turn — hexafoil #" + (placedBy[0] + 1);
     } else {
       status.textContent = (current === 0 ? "You to play (teal)" : "Friend to play (coral)");
     }

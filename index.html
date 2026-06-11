@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Hexia</title>
+<title>Hexafoil</title>
 <style>
   :root {
     --bg: #f6f3ec;
@@ -17,7 +17,7 @@
   html, body { touch-action: manipulation; }
   @media (max-width: 600px) {
     h1 { font-size: 22px; letter-spacing: 7px; }
-    #rotate, #new-game { padding: 12px 24px; font-size: 15px; }
+    #rotate, #new-game, #how-to-play { padding: 12px 24px; font-size: 15px; }
   }
   body {
     margin: 0;
@@ -37,40 +37,24 @@
     margin: 0 0 2px;
     text-transform: uppercase;
   }
-  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 20px; }
+  .subtitle { color: var(--muted); font-size: 13px; margin-bottom: 14px; }
 
-  .panel {
+  .counts {
     display: flex;
-    align-items: center;
-    gap: 14px;
-    margin-bottom: 6px;
+    gap: 18px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-bottom: 4px;
   }
-  .card {
-    display: flex;
-    align-items: center;
-    gap: 9px;
-    padding: 7px 14px;
-    border-radius: 12px;
-    border: 2px solid transparent;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(0,0,0,.07);
-    transition: border-color .2s, transform .2s;
-  }
-  .card.active { border-color: var(--gold); transform: scale(1.05); }
-  .card .swatch { width: 30px; height: 30px; }
-  .card .swatch svg { width: 100%; height: 100%; display: block; }
-  .card .name { font-size: 13px; font-weight: 600; }
-  .card .left { font-size: 10.5px; color: var(--muted); }
-  .card .score { font-size: 21px; font-weight: 700; min-width: 22px; text-align: center; }
+  .counts strong { color: var(--ink); }
 
   #status {
-    height: 28px;
+    height: 26px;
     font-size: 14px;
     color: var(--muted);
     display: flex;
     align-items: center;
   }
-  #status.game-over { color: var(--ink); font-weight: 700; font-size: 17px; }
 
   #tray {
     display: flex;
@@ -83,7 +67,7 @@
     box-shadow: 0 1px 3px rgba(0,0,0,.07);
   }
   .tray-label { font-size: 12px; color: var(--muted); font-weight: 600; }
-  #next-tile { width: 46px; height: 46px; cursor: pointer; }
+  #next-tile { width: 52px; height: 52px; cursor: pointer; }
   #next-tile svg { width: 100%; height: 100%; display: block; }
   #rotate {
     padding: 6px 14px;
@@ -98,61 +82,34 @@
   }
   #rotate:hover { border-color: var(--gold); }
 
-  #board { width: min(560px, 94vw); }
+  #board { width: min(640px, 94vw); }
 
   .cell .base {
     fill: var(--empty);
     stroke: var(--empty-edge);
-    stroke-width: 1.5;
+    stroke-width: 1.2;
     transition: fill .15s;
   }
   .cell:hover .base { fill: #e2ddcd; cursor: pointer; }
 
-  .ghost { opacity: .45; pointer-events: none; }
-  .tile { pointer-events: none; }
-
-  .pop { animation: pop .25s ease-out; transform-box: fill-box; transform-origin: center; }
+  .ghost { opacity: .5; pointer-events: none; }
+  .piece { pointer-events: none; }
+  .pop { animation: pop .3s ease-out; transform-box: fill-box; transform-origin: center; }
   @keyframes pop {
-    from { transform: scale(.6); }
-    60%  { transform: scale(1.08); }
+    from { transform: scale(.7); }
+    60%  { transform: scale(1.06); }
     to   { transform: scale(1); }
-  }
-
-  .tri-flash {
-    fill: rgba(227, 179, 76, .3);
-    stroke: var(--gold);
-    stroke-width: 3.5;
-    stroke-linejoin: round;
-    animation: triFade 1.5s ease-out forwards;
-  }
-  @keyframes triFade {
-    0%   { opacity: 0; }
-    15%  { opacity: 1; }
-    70%  { opacity: 1; }
-    100% { opacity: 0; }
-  }
-
-  .float-score {
-    font-size: 23px;
-    font-weight: 800;
-    font-family: inherit;
-    paint-order: stroke;
-    stroke: #fff;
-    stroke-width: 4px;
-    animation: rise 1.5s ease-out forwards;
-  }
-  @keyframes rise {
-    from { opacity: 1; transform: translateY(0); }
-    to   { opacity: 0; transform: translateY(-30px); }
   }
 
   .controls {
     display: flex;
     align-items: center;
-    gap: 18px;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 14px;
     margin-top: 16px;
   }
-  #ai-label, #ai-first-label {
+  #companion-label {
     font-size: 13px;
     font-weight: 600;
     color: var(--ink);
@@ -162,8 +119,8 @@
     cursor: pointer;
     user-select: none;
   }
-  #ai-label input, #ai-first-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
-  #new-game {
+  #companion-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+  #new-game, #how-to-play {
     padding: 9px 26px;
     font-size: 14px;
     font-weight: 600;
@@ -174,59 +131,169 @@
     cursor: pointer;
     transition: border-color .15s;
   }
-  #new-game:hover { border-color: var(--gold); }
+  #new-game:hover, #how-to-play:hover { border-color: var(--gold); }
 
   .rules {
     margin-top: 18px;
-    max-width: 440px;
+    max-width: 460px;
     font-size: 12.5px;
     color: var(--muted);
     text-align: center;
     line-height: 1.5;
   }
+
+  /* ---- tutorial overlay ---- */
+  #tutorial {
+    position: fixed;
+    inset: 0;
+    background: rgba(74, 74, 68, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 10;
+  }
+  .tut-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 22px 22px 16px;
+    width: min(380px, 94vw);
+    box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    text-align: center;
+  }
+  .tut-art { height: 170px; display: flex; align-items: center; justify-content: center; }
+  .tut-art svg { max-height: 100%; max-width: 80%; }
+  .tut-slide h2 { font-size: 18px; margin: 12px 0 6px; letter-spacing: 1px; }
+  .tut-slide p { font-size: 14.5px; line-height: 1.55; color: var(--ink); margin: 0 0 6px; }
+  .tut-dots { display: flex; justify-content: center; gap: 7px; margin: 14px 0 12px; }
+  .tut-dots span {
+    width: 8px; height: 8px; border-radius: 50%;
+    background: var(--empty-edge);
+  }
+  .tut-dots span.on { background: var(--gold); }
+  .tut-nav { display: flex; gap: 10px; }
+  .tut-nav button {
+    flex: 1;
+    padding: 13px 0;
+    font-size: 15px;
+    font-weight: 600;
+    border-radius: 999px;
+    cursor: pointer;
+    border: 2px solid var(--empty-edge);
+    background: #fff;
+    color: var(--ink);
+  }
+  .tut-nav #tut-next {
+    background: var(--gold);
+    border-color: var(--gold);
+    color: #fff;
+  }
 </style>
 </head>
 <body>
-  <h1>Hexia</h1>
-  <div class="subtitle">place more pieces than your opponent &middot; <a href="garden.html" style="color:inherit">garden mode</a></div>
+  <h1>Hexafoil</h1>
+  <div class="subtitle">grow a pattern together</div>
 
-  <div class="panel">
-    <div class="card" id="card-0">
-      <div class="swatch" id="swatch-0"></div>
-      <div><div class="name" id="name-0"></div><div class="left" id="left-0"></div></div>
-      <div class="score" id="score-0">0</div>
-    </div>
-    <div class="card" id="card-1">
-      <div class="swatch" id="swatch-1"></div>
-      <div><div class="name" id="name-1"></div><div class="left" id="left-1"></div></div>
-      <div class="score" id="score-1">0</div>
-    </div>
+  <div class="counts">
+    <span>You: <strong id="count-you">0</strong> hexafoils (teal)</span>
+    <span><span id="who-1">Claude</span>: <strong id="count-claude">0</strong> hexafoils (coral)</span>
   </div>
 
   <div id="status"></div>
   <div id="tray">
-    <span class="tray-label">Next piece</span>
+    <span class="tray-label">Next hexafoil</span>
     <div id="next-tile" title="Click to rotate"></div>
     <button id="rotate">&#10227; Rotate &mdash; R</button>
   </div>
   <div id="board"></div>
   <div class="controls">
-    <button id="new-game">New game</button>
-    <label id="ai-label"><input type="checkbox" id="ai-toggle"> Play against Claude</label>
-    <label id="ai-first-label"><input type="checkbox" id="ai-first"> Claude goes first</label>
+    <button id="new-game">New garden</button>
+    <button id="how-to-play">How to play</button>
+    <label id="companion-label"><input type="checkbox" id="with-claude" checked> Grow with Claude</label>
   </div>
 
   <p class="rules">
-    The piece is a triangle of three hexagons. Take turns placing pieces on
-    empty cells &mdash; hover to preview, press <strong>R</strong> (or the
-    rotate button) to pivot the piece, click to place. On a phone: tap once to
-    preview, tap again to place. When no piece fits anywhere, the game ends:
-    <strong>whoever placed more pieces wins</strong>. Squeeze your pieces in,
-    and waste space so your opponent can't.
+    A hexafoil is one piece of three hexagons. Take turns growing one shared
+    pattern &mdash; every hexafoil must touch the garden. No winners, no score.
+    Uncheck &ldquo;Grow with Claude&rdquo; to pass-and-play with a friend.
   </p>
 
-  <script src="engine.js"></script>
-  <script src="ai.js"></script>
-  <script src="ui.js"></script>
+  <!-- ---- tutorial ---- -->
+  <div id="tutorial" style="display:none">
+    <div class="tut-card">
+      <div class="tut-slide" id="tut-slide-0">
+        <div class="tut-art" id="tut-art-0"></div>
+        <h2>Meet the hexafoil</h2>
+        <p>Three hexagons, one piece. You and a partner take turns planting
+        hexafoils to grow a shared garden &mdash; you plant teal, they plant coral.</p>
+      </div>
+      <div class="tut-slide" id="tut-slide-1" style="display:none">
+        <div class="tut-art" id="tut-art-1"></div>
+        <h2>Planting</h2>
+        <p>Tap an empty cell to preview your hexafoil &mdash; it appears faded,
+        like this. Tap the <strong>&#10227; Rotate</strong> button to spin it
+        around the cell, then tap the same cell again to plant it.</p>
+      </div>
+      <div class="tut-slide" id="tut-slide-2" style="display:none">
+        <div class="tut-art" id="tut-art-2"></div>
+        <h2>Growing together</h2>
+        <p>Every hexafoil must touch the garden, which grows outward forever.
+        There's no score and no winner &mdash; but mind the gaps: a hole smaller
+        than three cells can never be filled.</p>
+      </div>
+      <div class="tut-dots" id="tut-dots"></div>
+      <div class="tut-nav">
+        <button id="tut-back">Back</button>
+        <button id="tut-next">Next</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="garden.js"></script>
+  <script>
+  (function () {
+    "use strict";
+    var SLIDES = 3, idx = 0;
+    var overlay = document.getElementById("tutorial");
+    var dots = document.getElementById("tut-dots");
+    for (var i = 0; i < SLIDES; i++) dots.appendChild(document.createElement("span"));
+
+    function show(i) {
+      idx = i;
+      for (var n = 0; n < SLIDES; n++) {
+        document.getElementById("tut-slide-" + n).style.display = n === i ? "block" : "none";
+        dots.children[n].className = n === i ? "on" : "";
+      }
+      document.getElementById("tut-back").style.visibility = i === 0 ? "hidden" : "visible";
+      document.getElementById("tut-next").textContent = i === SLIDES - 1 ? "Start growing" : "Next";
+    }
+    function open() { overlay.style.display = "flex"; show(0); }
+    function close() {
+      overlay.style.display = "none";
+      try { localStorage.setItem("hexafoil-tutorial-seen", "1"); } catch (e) {}
+    }
+    document.getElementById("tut-next").addEventListener("click", function () {
+      if (idx === SLIDES - 1) close(); else show(idx + 1);
+    });
+    document.getElementById("tut-back").addEventListener("click", function () {
+      if (idx > 0) show(idx - 1);
+    });
+    document.getElementById("how-to-play").addEventListener("click", open);
+
+    // illustrations (drawn by the game's own art code)
+    var A = [[0, 0], [1, 0], [1, -1]];           // one hexafoil
+    var B = [[0, 1], [0, 2], [1, 1]];            // touches A below
+    var C = [[2, 0], [3, -1], [2, -1]];          // touches A to the right
+    window.HexafoilArt(document.getElementById("tut-art-0"), [{ cells: A, player: 0 }]);
+    window.HexafoilArt(document.getElementById("tut-art-1"), [{ cells: A, player: 0, ghost: true }]);
+    window.HexafoilArt(document.getElementById("tut-art-2"), [
+      { cells: A, player: 0 }, { cells: B, player: 1 }, { cells: C, player: 0 },
+    ]);
+
+    var seen = false;
+    try { seen = !!localStorage.getItem("hexafoil-tutorial-seen"); } catch (e) {}
+    if (!seen) open();
+  })();
+  </script>
 </body>
 </html>
