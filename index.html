@@ -269,9 +269,10 @@
 
   <p class="rules">
     A hexafoil is one piece of three hexagons. Take turns growing one shared
-    pattern &mdash; every hexafoil must touch the garden. No winners, no score.
-    Toggle &ldquo;Grow with Claude&rdquo; anytime to swap Claude and a
-    pass-and-play friend &mdash; your garden stays.
+    pattern &mdash; every hexafoil must touch the garden, and no move may seal
+    off a gap too small to ever hold a hexafoil. No winners, no score. Toggle
+    &ldquo;Grow with Claude&rdquo; anytime to swap Claude and a pass-and-play
+    friend &mdash; your garden stays.
   </p>
 
   <!-- ---- online invite panel ---- -->
@@ -310,8 +311,9 @@
         <div class="tut-art" id="tut-art-2"></div>
         <h2>Growing together</h2>
         <p>Every hexafoil must touch the garden, which grows outward forever.
-        There's no score and no winner &mdash; but mind the gaps: a hole smaller
-        than three cells can never be filled.</p>
+        There's no score and no winner. One rule of care: you can't make a move
+        that seals off a gap too small to ever hold a hexafoil &mdash; the game
+        simply won't allow it.</p>
       </div>
       <div class="tut-dots" id="tut-dots"></div>
       <div class="tut-nav">
@@ -323,7 +325,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20260611-1"></script>
+  <script src="garden.js?v=20260611-2"></script>
   <script>
   (function () {
     "use strict";

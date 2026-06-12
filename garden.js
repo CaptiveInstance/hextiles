@@ -79,7 +79,10 @@
   function canPlace(q, r, i) {
     const cells = clusterCells(q, r, i);
     for (const [cq, cr] of cells) if (!isEmpty(cq, cr)) return false;
-    return touchesPattern(cells);
+    if (!touchesPattern(cells)) return false;
+    // RULE: no move may strand empty cells that could never again hold a
+    // hexafoil (e.g. sealing off a 1- or 2-cell pocket). Applies to everyone.
+    return orphanCost(cells) === 0;
   }
 
   function doPlace(q, r, i, player) {
@@ -431,9 +434,9 @@
           const cells = clusterCells(q, r, i);
           let px = 0, py = 0;
           for (const [pq, pr] of cells) { const c = center(pq, pr); px += c.x / 3; py += c.y / 3; }
-          const score = orphanCost(cells) * 100000
-            + Math.hypot(px - cx, py - cy)
-            + Math.random() * SIZE * 1.5;
+          // orphan-creating moves are now illegal for everyone (see canPlace),
+          // so Claude only weighs compactness and a little wander
+          const score = Math.hypot(px - cx, py - cy) + Math.random() * SIZE * 1.5;
           if (score < bestScore) { bestScore = score; best = { q: q, r: r, i: i }; }
         }
       }
@@ -649,6 +652,9 @@
   });
 
   newGarden();
+
+  // test hook (harmless in production): lets automated checks drive the rules
+  window.HexafoilTest = { canPlace: canPlace, doPlace: doPlace };
 
   // arriving via an invite link?
   const joinMatch = location.search.match(/[?&]join=([\w-]+)/);
