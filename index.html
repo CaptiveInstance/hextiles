@@ -120,7 +120,7 @@
     user-select: none;
   }
   #companion-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
-  #new-game, #how-to-play {
+  #new-game, #how-to-play, #play-online {
     padding: 9px 26px;
     font-size: 14px;
     font-weight: 600;
@@ -131,7 +131,61 @@
     cursor: pointer;
     transition: border-color .15s;
   }
-  #new-game:hover, #how-to-play:hover { border-color: var(--gold); }
+  #new-game:hover, #how-to-play:hover, #play-online:hover { border-color: var(--gold); }
+
+  /* ---- online invite panel ---- */
+  #invite {
+    position: fixed;
+    inset: 0;
+    background: rgba(74, 74, 68, .5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 16px;
+    z-index: 20;
+  }
+  .invite-card {
+    background: var(--bg);
+    border-radius: 18px;
+    padding: 22px;
+    width: min(400px, 94vw);
+    box-shadow: 0 8px 40px rgba(0,0,0,.25);
+    text-align: center;
+  }
+  .invite-card h2 { font-size: 18px; margin: 0 0 10px; letter-spacing: 1px; }
+  #invite-status { font-size: 14.5px; line-height: 1.5; color: var(--ink); margin: 0 0 12px; }
+  #invite-link-row { display: none; gap: 8px; margin-bottom: 12px; }
+  #invite-link {
+    flex: 1;
+    min-width: 0;
+    padding: 11px 12px;
+    font-size: 13px;
+    border: 2px solid var(--empty-edge);
+    border-radius: 10px;
+    background: #fff;
+    color: var(--ink);
+  }
+  #copy-link {
+    padding: 11px 18px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 10px;
+    border: 2px solid var(--gold);
+    background: var(--gold);
+    color: #fff;
+    cursor: pointer;
+  }
+  .invite-note { font-size: 12px; color: var(--muted); line-height: 1.5; margin: 0 0 12px; }
+  #invite-close {
+    padding: 11px 30px;
+    font-size: 14px;
+    font-weight: 600;
+    border-radius: 999px;
+    border: 2px solid var(--empty-edge);
+    background: #fff;
+    color: var(--ink);
+    cursor: pointer;
+  }
 
   .rules {
     margin-top: 18px;
@@ -195,7 +249,7 @@
   <div class="subtitle">grow a pattern together</div>
 
   <div class="counts">
-    <span>You: <strong id="count-you">0</strong> hexafoils (teal)</span>
+    <span><span id="who-0">You</span>: <strong id="count-you">0</strong> hexafoils (teal)</span>
     <span><span id="who-1">Claude</span>: <strong id="count-claude">0</strong> hexafoils (coral)</span>
   </div>
 
@@ -209,6 +263,7 @@
   <div class="controls">
     <button id="new-game">New garden</button>
     <button id="how-to-play">How to play</button>
+    <button id="play-online">Play online</button>
     <label id="companion-label"><input type="checkbox" id="with-claude" checked> Grow with Claude</label>
   </div>
 
@@ -218,6 +273,22 @@
     Toggle &ldquo;Grow with Claude&rdquo; anytime to swap Claude and a
     pass-and-play friend &mdash; your garden stays.
   </p>
+
+  <!-- ---- online invite panel ---- -->
+  <div id="invite" style="display:none">
+    <div class="invite-card">
+      <h2>Grow online with a friend</h2>
+      <p id="invite-status"></p>
+      <div id="invite-link-row">
+        <input id="invite-link" readonly>
+        <button id="copy-link">Copy</button>
+      </div>
+      <p class="invite-note">You'll be teal; your friend will be coral. Keep the
+      page open — the garden lives in your two browsers. Reload the page to
+      leave the online garden.</p>
+      <button id="invite-close">Close</button>
+    </div>
+  </div>
 
   <!-- ---- tutorial ---- -->
   <div id="tutorial" style="display:none">
@@ -250,6 +321,7 @@
     </div>
   </div>
 
+  <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <script src="garden.js"></script>
   <script>
   (function () {

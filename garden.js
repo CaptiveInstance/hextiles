@@ -40,9 +40,13 @@
   let hovered = null;
   let busy = false;  // Claude is "thinking"
   let armed = null;  // touch devices: cell key awaiting a confirming tap
+  let moves = [];    // every move this garden: {q,r,i,player} — for online sync
+  let net = null;    // online session: { peer, conn, myIndex, hostId }
 
   function isHumanTurn() {
-    return !busy && (!withClaude || current === 0);
+    if (busy) return false;
+    if (net) return !!net.conn && current === net.myIndex;
+    return !withClaude || current === 0;
   }
 
   const IS_TOUCH = typeof window.matchMedia === "function"
@@ -85,6 +89,7 @@
     pieces.push(piece);
     placedBy[player]++;
     for (const [cq, cr] of cells) cellOwner.set(key(cq, cr), pieces.length - 1);
+    moves.push({ q: q, r: r, i: i, player: player });
     return piece;
   }
 
@@ -348,10 +353,11 @@
       rot = currentRot = found;
     }
     doPlace(q, r, rot, current);
+    if (net && net.conn) net.conn.send({ t: "move", q: q, r: r, i: rot });
     current = 1 - current;
     render(true);
     updateStatus();
-    if (withClaude && current === 1) setTimeout(claudeMove, 800);
+    if (!net && withClaude && current === 1) setTimeout(claudeMove, 800);
   }
 
   // Can this empty cell still belong to SOME all-empty cluster? If not, it's
@@ -398,9 +404,9 @@
   }
 
   function claudeMove() {
-    // stale or invalid wake-ups: toggled to friend mode, already thinking,
-    // or no longer coral's turn
-    if (busy || !withClaude || current !== 1) return;
+    // stale or invalid wake-ups: online session, toggled to friend mode,
+    // already thinking, or no longer coral's turn
+    if (busy || net || !withClaude || current !== 1) return;
     busy = true;
     updateStatus();
     setTimeout(function () {
@@ -458,30 +464,162 @@
 
   function updateStatus() {
     const status = document.getElementById("status");
-    document.getElementById("who-1").textContent = withClaude ? "Claude" : "Friend";
-    if (busy) {
-      status.textContent = "Claude is placing…";
-    } else if (withClaude) {
-      status.textContent = "Your turn — hexafoil #" + (placedBy[0] + 1);
+    const who0 = document.getElementById("who-0");
+    const who1 = document.getElementById("who-1");
+    if (net) {
+      who0.textContent = net.myIndex === 0 ? "You" : "Friend";
+      who1.textContent = net.myIndex === 1 ? "You" : "Friend";
+      if (!net.conn) {
+        status.textContent = "Online garden — waiting for your friend…";
+      } else if (current === net.myIndex) {
+        status.textContent = "Your turn — you're " + (net.myIndex === 0 ? "teal" : "coral");
+      } else {
+        status.textContent = "Waiting for your friend…";
+      }
     } else {
-      status.textContent = (current === 0 ? "You to play (teal)" : "Friend to play (coral)");
+      who0.textContent = "You";
+      who1.textContent = withClaude ? "Claude" : "Friend";
+      if (busy) {
+        status.textContent = "Claude is placing…";
+      } else if (withClaude) {
+        status.textContent = "Your turn — hexafoil #" + (placedBy[0] + 1);
+      } else {
+        status.textContent = (current === 0 ? "You to play (teal)" : "Friend to play (coral)");
+      }
     }
     document.getElementById("count-you").textContent = placedBy[0];
     document.getElementById("count-claude").textContent = placedBy[1];
     renderTray();
   }
 
-  function newGarden() {
+  function resetState() {
     cellOwner = new Map();
     pieces = [];
     placedBy = [0, 0];
+    moves = [];
     current = 0;
     busy = false;
     currentRot = 0;
     hovered = null;
     armed = null;
+  }
+
+  function newGarden() {
+    resetState();
+    if (net && net.conn) net.conn.send({ t: "reset" });
     render(false);
     updateStatus();
+  }
+
+  // ---- online play (PeerJS: browser-to-browser, no accounts) ---------------
+
+  function setInviteStatus(text) {
+    document.getElementById("invite-status").textContent = text;
+  }
+  function showInvite() { document.getElementById("invite").style.display = "flex"; }
+  function hideInvite() { document.getElementById("invite").style.display = "none"; }
+
+  function enterRemoteUI() {
+    document.getElementById("companion-label").style.display = "none";
+    updateStatus();
+  }
+
+  function wireConn(conn) {
+    net.conn = conn;
+    conn.on("data", function (msg) {
+      if (!msg || typeof msg !== "object") return;
+      if (msg.t === "move") {
+        doPlace(msg.q, msg.r, msg.i, current);
+        current = 1 - current;
+        render(true);
+        updateStatus();
+      } else if (msg.t === "sync") {
+        resetState();
+        for (const m of msg.moves) doPlace(m.q, m.r, m.i, m.player);
+        current = msg.current;
+        render(false);
+        updateStatus();
+      } else if (msg.t === "reset") {
+        resetState();
+        render(false);
+        updateStatus();
+      }
+    });
+    conn.on("close", function () {
+      net.conn = null;
+      setInviteStatus("Your friend disconnected. If they reopen the link, the garden continues.");
+      showInvite();
+      updateStatus();
+    });
+    // host catches a (re)joining friend up on the whole garden
+    if (net.myIndex === 0) {
+      conn.send({ t: "sync", moves: moves, current: current });
+    }
+    setInviteStatus("Connected! Close this and start growing.");
+    setTimeout(hideInvite, 1200);
+    updateStatus();
+  }
+
+  function startOnline() {
+    showInvite();
+    if (typeof Peer === "undefined") {
+      setInviteStatus("Couldn't load the connection library — check your internet and reload the page.");
+      return;
+    }
+    if (net && net.peer) return; // already hosting/joined; just show the panel
+    const id = "hexafoil-" + Math.random().toString(36).slice(2, 8);
+    net = { peer: null, conn: null, myIndex: 0, hostId: id };
+    setInviteStatus("Setting up…");
+    try {
+      const peer = new Peer(id);
+      net.peer = peer;
+      peer.on("open", function () {
+        const link = location.origin + location.pathname + "?join=" + id;
+        document.getElementById("invite-link").value = link;
+        document.getElementById("invite-link-row").style.display = "flex";
+        setInviteStatus("Send this link to a friend, then wait for them to open it:");
+      });
+      peer.on("connection", function (conn) {
+        if (net.conn) { conn.close(); return; } // one friend at a time
+        conn.on("open", function () { wireConn(conn); });
+      });
+      peer.on("error", function (e) {
+        setInviteStatus("Connection trouble (" + e.type + "). Reload the page and try again.");
+      });
+    } catch (err) {
+      setInviteStatus("This browser can't make peer connections.");
+      net = null;
+      return;
+    }
+    enterRemoteUI();
+  }
+
+  function joinFromLink(hostId) {
+    showInvite();
+    if (typeof Peer === "undefined") {
+      setInviteStatus("Couldn't load the connection library — check your internet and reload the page.");
+      return;
+    }
+    net = { peer: null, conn: null, myIndex: 1, hostId: hostId };
+    setInviteStatus("Joining your friend's garden…");
+    try {
+      const peer = new Peer();
+      net.peer = peer;
+      peer.on("open", function () {
+        const conn = peer.connect(hostId, { reliable: true });
+        conn.on("open", function () { wireConn(conn); });
+      });
+      peer.on("error", function (e) {
+        setInviteStatus(e.type === "peer-unavailable"
+          ? "Couldn't find that garden — ask your friend to reopen their page and send a fresh link."
+          : "Connection trouble (" + e.type + "). Reload to try again.");
+      });
+    } catch (err) {
+      setInviteStatus("This browser can't make peer connections.");
+      net = null;
+      return;
+    }
+    enterRemoteUI();
   }
 
   // ---- init --------------------------------------------------------------
@@ -492,6 +630,18 @@
     updateStatus(); // keep the garden — just swap who plays coral
     if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
+  document.getElementById("play-online").addEventListener("click", startOnline);
+  document.getElementById("invite-close").addEventListener("click", hideInvite);
+  document.getElementById("copy-link").addEventListener("click", function () {
+    const input = document.getElementById("invite-link");
+    const done = () => { this.textContent = "Copied!"; setTimeout(() => { this.textContent = "Copy"; }, 1500); };
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(input.value).then(done.bind(this), () => { input.select(); });
+    } else {
+      input.select();
+      try { document.execCommand("copy"); done.call(this); } catch (e) {}
+    }
+  });
   document.getElementById("rotate").addEventListener("click", rotate);
   document.getElementById("next-tile").addEventListener("click", rotate);
   document.addEventListener("keydown", (e) => {
@@ -499,4 +649,8 @@
   });
 
   newGarden();
+
+  // arriving via an invite link?
+  const joinMatch = location.search.match(/[?&]join=([\w-]+)/);
+  if (joinMatch) joinFromLink(joinMatch[1]);
 })();
