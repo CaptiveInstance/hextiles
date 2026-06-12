@@ -653,8 +653,30 @@
 
   newGarden();
 
-  // test hook (harmless in production): lets automated checks drive the rules
-  window.HexafoilTest = { canPlace: canPlace, doPlace: doPlace };
+  // test/companion hook (harmless in production): lets automated checks and
+  // Claude-in-the-browser read the garden and take proper turns
+  window.HexafoilTest = {
+    canPlace: canPlace,
+    doPlace: doPlace,
+    state: function () {
+      return {
+        moves: moves.slice(),
+        current: current,
+        counts: placedBy.slice(),
+        withClaude: withClaude,
+        online: !!net,
+      };
+    },
+    play: function (q, r, i) {
+      if (!canPlace(q, r, i)) return false;
+      doPlace(q, r, i, current);
+      if (net && net.conn) net.conn.send({ t: "move", q: q, r: r, i: i });
+      current = 1 - current;
+      render(true);
+      updateStatus();
+      return true;
+    },
+  };
 
   // arriving via an invite link?
   const joinMatch = location.search.match(/[?&]join=([\w-]+)/);
