@@ -398,9 +398,17 @@
   }
 
   function claudeMove() {
+    // stale or invalid wake-ups: toggled to friend mode, already thinking,
+    // or no longer coral's turn
+    if (busy || !withClaude || current !== 1) return;
     busy = true;
     updateStatus();
     setTimeout(function () {
+      if (!withClaude) { // toggled off while "thinking" — hand turn to friend
+        busy = false;
+        updateStatus();
+        return;
+      }
       // organic growth: never orphan empty hexes if avoidable, then prefer
       // staying close to the pattern's center of mass, with a little wander
       let sx = 0, sy = 0, n = 0;
@@ -481,7 +489,8 @@
   document.getElementById("new-game").addEventListener("click", newGarden);
   document.getElementById("with-claude").addEventListener("change", function (e) {
     withClaude = e.target.checked;
-    newGarden();
+    updateStatus(); // keep the garden — just swap who plays coral
+    if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
   document.getElementById("rotate").addEventListener("click", rotate);
   document.getElementById("next-tile").addEventListener("click", rotate);
