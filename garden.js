@@ -115,6 +115,37 @@
     return [...out.values()];
   }
 
+  // Hexagonal "graph paper": a generous field of empty cells so a hexafoil
+  // always has room around it and never appears to drop off the edge. We draw
+  // every empty cell within PAPER_RADIUS rings of the pattern (or of the
+  // origin before the first piece). Frontier cells are still where legal
+  // placements live; this just gives them visible space to grow into.
+  const PAPER_RADIUS = 3;
+
+  function addDisk(cq, cr, radius, out) {
+    for (let dq = -radius; dq <= radius; dq++) {
+      const lo = Math.max(-radius, -dq - radius);
+      const hi = Math.min(radius, -dq + radius);
+      for (let dr = lo; dr <= hi; dr++) {
+        const q = cq + dq, r = cr + dr;
+        if (isEmpty(q, r)) out.set(key(q, r), [q, r]);
+      }
+    }
+  }
+
+  function paperCells() {
+    const out = new Map();
+    if (pieces.length === 0) {
+      addDisk(0, 0, PAPER_RADIUS + 1, out);
+    } else {
+      for (const k of cellOwner.keys()) {
+        const [q, r] = k.split(",").map(Number);
+        addDisk(q, r, PAPER_RADIUS, out);
+      }
+    }
+    return [...out.values()];
+  }
+
   // ---- geometry & svg ----------------------------------------------------
 
   function center(q, r) {
@@ -253,13 +284,13 @@
     const boardEl = document.getElementById("board");
     boardEl.innerHTML = "";
 
-    const frontier = frontierCells();
+    const paper = paperCells();
 
     // bounds over everything we draw
     let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
     const consider = [];
     for (const p of pieces) for (const c of p.cells) consider.push(c);
-    for (const c of frontier) consider.push(c);
+    for (const c of paper) consider.push(c);
     for (const [q, r] of consider) {
       const c = center(q, r);
       minX = Math.min(minX, c.x); maxX = Math.max(maxX, c.x);
@@ -275,7 +306,7 @@
     const cellLayer = el("g", {}, svg);
     const pieceLayer = el("g", { "pointer-events": "none" }, svg);
 
-    for (const [q, r] of frontier) {
+    for (const [q, r] of paper) {
       const c = center(q, r);
       const g = el("g", { class: "cell" }, cellLayer);
       el("polygon", { points: hexPoints(c.x, c.y, 0.97), class: "base" }, g);
