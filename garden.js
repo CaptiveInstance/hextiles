@@ -45,6 +45,13 @@
   let duel = false;  // duel mode: first untouched triangle wins
   let winner = null; // player index of the winner, or null while playing
   let winningPieceIdx = -1; // index of the isolated piece that ended the game
+  let boardR = 0;    // 0 = infinite garden; otherwise hex-board radius (2 -> 19 cells)
+
+  function inBoard(q, r) {
+    if (!boardR) return true;
+    const s = -q - r;
+    return Math.max(Math.abs(q), Math.abs(r), Math.abs(s)) <= boardR;
+  }
 
   function isHumanTurn() {
     if (busy || winner !== null) return false;
@@ -81,7 +88,10 @@
 
   function canPlace(q, r, i) {
     const cells = clusterCells(q, r, i);
-    for (const [cq, cr] of cells) if (!isEmpty(cq, cr)) return false;
+    for (const [cq, cr] of cells) {
+      if (!inBoard(cq, cr)) return false;  // walls are walls
+      if (!isEmpty(cq, cr)) return false;
+    }
     if (!touchesPattern(cells)) return false;
     // RULE: no move may strand empty cells that could never again hold a
     // hexafoil (e.g. sealing off a 1- or 2-cell pocket). Applies to everyone.
@@ -210,9 +220,20 @@
 
   // Empty cells adjacent to the pattern (clickable anchors). Before the
   // first piece: a small starting patch around the origin.
+  function allBoardCells() {
+    const out = [];
+    for (let q = -boardR; q <= boardR; q++) {
+      for (let r = -boardR; r <= boardR; r++) {
+        if (inBoard(q, r)) out.push([q, r]);
+      }
+    }
+    return out;
+  }
+
   function frontierCells() {
     const out = new Map();
     if (pieces.length === 0) {
+      if (boardR) return allBoardCells();
       out.set("0,0", [0, 0]);
       for (const d of DIRS) out.set(key(d[0], d[1]), [d[0], d[1]]);
       return [...out.values()];
@@ -221,7 +242,7 @@
       const [q, r] = k.split(",").map(Number);
       for (const d of DIRS) {
         const nq = q + d[0], nr = r + d[1];
-        if (isEmpty(nq, nr)) out.set(key(nq, nr), [nq, nr]);
+        if (inBoard(nq, nr) && isEmpty(nq, nr)) out.set(key(nq, nr), [nq, nr]);
       }
     }
     return [...out.values()];
@@ -246,6 +267,7 @@
   }
 
   function paperCells() {
+    if (boardR) return allBoardCells().filter(([q, r]) => isEmpty(q, r)); // walled board: show exactly the board
     const out = new Map();
     if (pieces.length === 0) {
       addDisk(0, 0, PAPER_RADIUS + 1, out);
@@ -531,7 +553,7 @@
     for (let i = 0; i < 6; i++) {
       const cells = clusterCells(q, r, i);
       let ok = true;
-      for (const [cq, cr] of cells) if (!isEmpty(cq, cr)) { ok = false; break; }
+      for (const [cq, cr] of cells) if (!inBoard(cq, cr) || !isEmpty(cq, cr)) { ok = false; break; }
       if (ok) return true;
     }
     return false;
@@ -550,6 +572,7 @@
           const k = key(nq, nr);
           if (seen.has(k)) continue;
           seen.add(k);
+          if (!inBoard(nq, nr)) continue;   // beyond the wall is nobody's problem
           if (!isEmpty(nq, nr)) continue;
           if (!cellCanHostPiece(nq, nr)) out.push(k);
         }
@@ -739,6 +762,8 @@
         resetState();
         duel = !!msg.duel;
         document.getElementById("duel-mode").checked = duel;
+        boardR = msg.board || 0;
+        document.getElementById("board-size").value = String(boardR);
         for (const m of msg.moves) doPlace(m.q, m.r, m.i, m.player);
         current = msg.current;
         render(false);
@@ -753,6 +778,12 @@
         resetState();
         render(false);
         updateStatus();
+      } else if (msg.t === "board") {
+        boardR = msg.board || 0;
+        document.getElementById("board-size").value = String(boardR);
+        resetState();
+        render(false);
+        updateStatus();
       }
     });
     conn.on("close", function () {
@@ -763,7 +794,7 @@
     });
     // host catches a (re)joining friend up on the whole garden
     if (net.myIndex === 0) {
-      conn.send({ t: "sync", moves: moves, current: current, duel: duel });
+      conn.send({ t: "sync", moves: moves, current: current, duel: duel, board: boardR });
     }
     setInviteStatus("Connected! Close this and start growing.");
     setTimeout(hideInvite, 1200);
@@ -840,6 +871,13 @@
     updateStatus(); // keep the garden — just swap who plays coral
     if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
+  document.getElementById("board-size").addEventListener("change", function (e) {
+    boardR = parseInt(e.target.value, 10) || 0;
+    resetState();
+    if (net && net.conn) net.conn.send({ t: "board", board: boardR });
+    render(false);
+    updateStatus();
+  });
   document.getElementById("duel-mode").addEventListener("change", function (e) {
     duel = e.target.checked;
     resetState();
@@ -883,6 +921,7 @@
         withClaude: withClaude,
         online: !!net,
         duel: duel,
+        board: boardR,
         winner: winner,
         winningPieceIdx: winningPieceIdx,
       };

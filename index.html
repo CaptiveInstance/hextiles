@@ -109,6 +109,24 @@
     gap: 14px;
     margin-top: 16px;
   }
+  #board-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  #board-label select {
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--ink);
+    background: #fff;
+    border: 2px solid var(--empty-edge);
+    border-radius: 8px;
+    padding: 4px 6px;
+    cursor: pointer;
+  }
   #companion-label, #duel-label {
     font-size: 13px;
     font-weight: 600;
@@ -275,6 +293,13 @@
     <button id="play-online">Play online</button>
     <label id="companion-label"><input type="checkbox" id="with-claude" checked> Grow with Claude</label>
     <label id="duel-label"><input type="checkbox" id="duel-mode"> Duel</label>
+    <label id="board-label">Board
+      <select id="board-size">
+        <option value="0" selected>&infin;</option>
+        <option value="2">19</option>
+        <option value="3">37</option>
+      </select>
+    </label>
   </div>
 
   <p class="rules">
@@ -338,7 +363,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20261114-1"></script>
+  <script src="garden.js?v=20261115-1"></script>
   <script>
   (function () {
     "use strict";
