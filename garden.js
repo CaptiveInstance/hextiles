@@ -46,6 +46,7 @@
   let winner = null; // player index of the winner, or null while playing
   let winningPieceIdx = -1; // index of the isolated piece that ended the game
   let boardR = 0;    // 0 = infinite garden; otherwise hex-board radius (2 -> 19 cells)
+  let orphanRule = true; // forbid moves that strand cells too small for a piece
 
   function inBoard(q, r) {
     if (!boardR) return true;
@@ -93,9 +94,9 @@
       if (!isEmpty(cq, cr)) return false;
     }
     if (!touchesPattern(cells)) return false;
-    // RULE: no move may strand empty cells that could never again hold a
-    // hexafoil (e.g. sealing off a 1- or 2-cell pocket). Applies to everyone.
-    return orphanCost(cells) === 0;
+    // RULE (toggleable): no move may strand empty cells that could never
+    // again hold a hexafoil. Applies to everyone when on.
+    return !orphanRule || orphanCost(cells) === 0;
   }
 
   function doPlace(q, r, i, player) {
@@ -764,6 +765,8 @@
         document.getElementById("duel-mode").checked = duel;
         boardR = msg.board || 0;
         document.getElementById("board-size").value = String(boardR);
+        orphanRule = msg.orphan !== false;
+        document.getElementById("orphan-rule").checked = orphanRule;
         for (const m of msg.moves) doPlace(m.q, m.r, m.i, m.player);
         current = msg.current;
         render(false);
@@ -784,6 +787,12 @@
         resetState();
         render(false);
         updateStatus();
+      } else if (msg.t === "rules") {
+        orphanRule = msg.orphan !== false;
+        document.getElementById("orphan-rule").checked = orphanRule;
+        resetState();
+        render(false);
+        updateStatus();
       }
     });
     conn.on("close", function () {
@@ -794,7 +803,7 @@
     });
     // host catches a (re)joining friend up on the whole garden
     if (net.myIndex === 0) {
-      conn.send({ t: "sync", moves: moves, current: current, duel: duel, board: boardR });
+      conn.send({ t: "sync", moves: moves, current: current, duel: duel, board: boardR, orphan: orphanRule });
     }
     setInviteStatus("Connected! Close this and start growing.");
     setTimeout(hideInvite, 1200);
@@ -871,6 +880,13 @@
     updateStatus(); // keep the garden — just swap who plays coral
     if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
+  document.getElementById("orphan-rule").addEventListener("change", function (e) {
+    orphanRule = e.target.checked;
+    resetState();
+    if (net && net.conn) net.conn.send({ t: "rules", orphan: orphanRule });
+    render(false);
+    updateStatus();
+  });
   document.getElementById("board-size").addEventListener("change", function (e) {
     boardR = parseInt(e.target.value, 10) || 0;
     resetState();
@@ -922,6 +938,7 @@
         online: !!net,
         duel: duel,
         board: boardR,
+        orphanRule: orphanRule,
         winner: winner,
         winningPieceIdx: winningPieceIdx,
       };

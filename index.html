@@ -127,7 +127,7 @@
     padding: 4px 6px;
     cursor: pointer;
   }
-  #companion-label, #duel-label {
+  #companion-label, #duel-label, #orphan-label {
     font-size: 13px;
     font-weight: 600;
     color: var(--ink);
@@ -137,7 +137,7 @@
     cursor: pointer;
     user-select: none;
   }
-  #companion-label input, #duel-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+  #companion-label input, #duel-label input, #orphan-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
 
   .win-tri {
     animation: winPulse 1.4s ease-in-out infinite;
@@ -293,6 +293,7 @@
     <button id="play-online">Play online</button>
     <label id="companion-label"><input type="checkbox" id="with-claude" checked> Grow with Claude</label>
     <label id="duel-label"><input type="checkbox" id="duel-mode"> Duel</label>
+    <label id="orphan-label"><input type="checkbox" id="orphan-rule" checked> Orphan rule</label>
     <label id="board-label">Board
       <select id="board-size">
         <option value="0" selected>&infin;</option>
@@ -363,7 +364,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20261115-1"></script>
+  <script src="garden.js?v=20261115-2"></script>
   <script>
   (function () {
     "use strict";
