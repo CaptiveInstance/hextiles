@@ -42,9 +42,12 @@
   let armed = null;  // touch devices: cell key awaiting a confirming tap
   let moves = [];    // every move this garden: {q,r,i,player} — for online sync
   let net = null;    // online session: { peer, conn, myIndex, hostId }
+  let duel = false;  // duel mode: first untouched triangle wins
+  let winner = null; // player index of the winner, or null while playing
+  let winningPieceIdx = -1; // index of the isolated piece that ended the game
 
   function isHumanTurn() {
-    if (busy) return false;
+    if (busy || winner !== null) return false;
     if (net) return !!net.conn && current === net.myIndex;
     return !withClaude || current === 0;
   }
@@ -89,11 +92,120 @@
     const cells = clusterCells(q, r, i);
     const col = colorFor(player, placedBy[player]);
     const piece = { cells: cells, player: player, fill: col.fill, edge: col.edge };
+    piece.contacts = contactKeys(cells);
     pieces.push(piece);
     placedBy[player]++;
     for (const [cq, cr] of cells) cellOwner.set(key(cq, cr), pieces.length - 1);
     moves.push({ q: q, r: r, i: i, player: player });
+    if (duel && winner === null) {
+      const idx = findUntouchedTriangle();
+      if (idx !== -1) { winner = player; winningPieceIdx = idx; }
+    }
     return piece;
+  }
+
+  // ---- duel mode: the untouched triangle -----------------------------------
+  // A piece's drawn triangle meets its own boundary at exactly six points:
+  // its three apex corners and the three chord midpoints (the outer vertex
+  // shared by each pair of its hexes). Two triangles touch iff their pieces
+  // share one of those points. A player WINS by placing the piece that
+  // completes an arrangement where some piece is fully walled in AND its
+  // triangle touches no other triangle.
+  function contactKeys(cells) {
+    const ctrs = cells.map(([q, r]) => center(q, r));
+    const P = {
+      x: (ctrs[0].x + ctrs[1].x + ctrs[2].x) / 3,
+      y: (ctrs[0].y + ctrs[1].y + ctrs[2].y) / 3,
+    };
+    const pts = [];
+    for (const c of ctrs) pts.push([2 * c.x - P.x, 2 * c.y - P.y]); // apex corners
+    pts.push([ctrs[0].x + ctrs[1].x - P.x, ctrs[0].y + ctrs[1].y - P.y]); // chord midpoints
+    pts.push([ctrs[0].x + ctrs[2].x - P.x, ctrs[0].y + ctrs[2].y - P.y]);
+    pts.push([ctrs[1].x + ctrs[2].x - P.x, ctrs[1].y + ctrs[2].y - P.y]);
+    return pts.map(p => p[0].toFixed(1) + "," + p[1].toFixed(1));
+  }
+
+  function isSurrounded(cells) {
+    const own = new Set(cells.map(c => key(c[0], c[1])));
+    for (const [q, r] of cells) {
+      for (const d of DIRS) {
+        const nk = key(q + d[0], r + d[1]);
+        if (!own.has(nk) && !cellOwner.has(nk)) return false;
+      }
+    }
+    return true;
+  }
+
+  function trianglesTouch(a, b) {
+    for (const ck of a.contacts) {
+      if (b.contacts.indexOf(ck) !== -1) return true;
+    }
+    return false;
+  }
+
+  // Any piece fully surrounded with an untouched triangle? Returns its index.
+  function findUntouchedTriangle() {
+    for (let n = 0; n < pieces.length; n++) {
+      if (!isSurrounded(pieces[n].cells)) continue;
+      let touched = false;
+      for (let m = 0; m < pieces.length; m++) {
+        if (m !== n && trianglesTouch(pieces[n], pieces[m])) { touched = true; break; }
+      }
+      if (!touched) return n;
+    }
+    return -1;
+  }
+
+  // Would placing this piece end the game? (Only pieces adjacent to the new
+  // one can newly become surrounded, so the scan stays local.)
+  function winIfPlaced(q, r, i) {
+    const cells = clusterCells(q, r, i);
+    const temp = { cells: cells, contacts: contactKeys(cells) };
+    const cellSet = new Set(cells.map(c => key(c[0], c[1])));
+    for (const [cq, cr] of cells) cellOwner.set(key(cq, cr), -1);
+    pieces.push(temp);
+    const near = [temp];
+    for (const p of pieces) {
+      if (p === temp) continue;
+      let adj = false;
+      for (const [pq, pr] of p.cells) {
+        for (const d of DIRS) {
+          if (cellSet.has(key(pq + d[0], pr + d[1]))) { adj = true; break; }
+        }
+        if (adj) break;
+      }
+      if (adj) near.push(p);
+    }
+    let win = false;
+    for (const cand of near) {
+      if (!isSurrounded(cand.cells)) continue;
+      let touched = false;
+      for (const p of pieces) {
+        if (p !== cand && trianglesTouch(cand, p)) { touched = true; break; }
+      }
+      if (!touched) { win = true; break; }
+    }
+    pieces.pop();
+    for (const [cq, cr] of cells) cellOwner.delete(key(cq, cr));
+    return win;
+  }
+
+  // After a hypothetical move of mine, could the opponent win immediately?
+  function allowsOpponentWin(q, r, i) {
+    const cells = clusterCells(q, r, i);
+    const temp = { cells: cells, contacts: contactKeys(cells) };
+    for (const [cq, cr] of cells) cellOwner.set(key(cq, cr), -1);
+    pieces.push(temp);
+    let bad = false;
+    outer:
+    for (const [fq, fr] of frontierCells()) {
+      for (let fi = 0; fi < 6; fi++) {
+        if (canPlace(fq, fr, fi) && winIfPlaced(fq, fr, fi)) { bad = true; break outer; }
+      }
+    }
+    pieces.pop();
+    for (const [cq, cr] of cells) cellOwner.delete(key(cq, cr));
+    return bad;
   }
 
   // Empty cells adjacent to the pattern (clickable anchors). Before the
@@ -321,6 +433,25 @@
       pieceLayer.appendChild(g);
     });
 
+    // duel victory: crown the untouched triangle in gold
+    if (winner !== null && winningPieceIdx >= 0 && pieces[winningPieceIdx]) {
+      const wp = pieces[winningPieceIdx];
+      const ctrs = wp.cells.map(([q, r]) => center(q, r));
+      const P = {
+        x: (ctrs[0].x + ctrs[1].x + ctrs[2].x) / 3,
+        y: (ctrs[0].y + ctrs[1].y + ctrs[2].y) / 3,
+      };
+      const pts = ctrs.map(c => (2 * c.x - P.x).toFixed(1) + "," + (2 * c.y - P.y).toFixed(1));
+      el("polygon", {
+        points: pts.join(" "),
+        fill: "none",
+        stroke: "#e3b34c",
+        "stroke-width": 6,
+        "stroke-linejoin": "round",
+        class: "win-tri",
+      }, pieceLayer);
+    }
+
     window._gardenPieceLayer = pieceLayer;
   }
 
@@ -439,8 +570,8 @@
 
   function claudeMove() {
     // stale or invalid wake-ups: online session, toggled to friend mode,
-    // already thinking, or no longer coral's turn
-    if (busy || net || !withClaude || current !== 1) return;
+    // already thinking, game already won, or no longer coral's turn
+    if (busy || net || !withClaude || current !== 1 || winner !== null) return;
     busy = true;
     updateStatus();
     setTimeout(function () {
@@ -449,29 +580,55 @@
         updateStatus();
         return;
       }
-      // organic growth: never orphan empty hexes if avoidable, then prefer
-      // staying close to the pattern's center of mass, with a little wander
-      let sx = 0, sy = 0, n = 0;
-      for (const k of cellOwner.keys()) {
-        const [q, r] = k.split(",").map(Number);
-        const c = center(q, r);
-        sx += c.x; sy += c.y; n++;
-      }
-      const cx = sx / n, cy = sy / n;
-      let best = null, bestScore = Infinity;
-      for (const [q, r] of frontierCells()) {
-        for (let i = 0; i < 6; i++) {
-          if (!canPlace(q, r, i)) continue;
-          const cells = clusterCells(q, r, i);
-          let px = 0, py = 0;
-          for (const [pq, pr] of cells) { const c = center(pq, pr); px += c.x / 3; py += c.y / 3; }
-          // orphan-creating moves are now illegal for everyone (see canPlace),
-          // so Claude only weighs compactness and a little wander
-          const score = Math.hypot(px - cx, py - cy) + Math.random() * SIZE * 1.5;
-          if (score < bestScore) { bestScore = score; best = { q: q, r: r, i: i }; }
+      let pick = null;
+
+      // Duel: take a winning placement if one exists
+      if (duel) {
+        outerWin:
+        for (const [q, r] of frontierCells()) {
+          for (let i = 0; i < 6; i++) {
+            if (canPlace(q, r, i) && winIfPlaced(q, r, i)) { pick = { q: q, r: r, i: i }; break outerWin; }
+          }
         }
       }
-      if (best) doPlace(best.q, best.r, best.i, 1);
+
+      if (!pick) {
+        // organic growth: prefer staying close to the pattern's center of
+        // mass, with a little wander (orphan moves are illegal for everyone)
+        let sx = 0, sy = 0, n = 0;
+        for (const k of cellOwner.keys()) {
+          const [q, r] = k.split(",").map(Number);
+          const c = center(q, r);
+          sx += c.x; sy += c.y; n++;
+        }
+        const cx = sx / n, cy = sy / n;
+        const candidates = [];
+        for (const [q, r] of frontierCells()) {
+          for (let i = 0; i < 6; i++) {
+            if (!canPlace(q, r, i)) continue;
+            const cells = clusterCells(q, r, i);
+            let px = 0, py = 0;
+            for (const [pq, pr] of cells) { const c = center(pq, pr); px += c.x / 3; py += c.y / 3; }
+            candidates.push({
+              q: q, r: r, i: i,
+              score: Math.hypot(px - cx, py - cy) + Math.random() * SIZE * 1.5,
+            });
+          }
+        }
+        candidates.sort((a, b) => a.score - b.score);
+        if (duel) {
+          // don't tee up an immediate win for the opponent, if avoidable
+          for (let n2 = 0; n2 < candidates.length && n2 < 15; n2++) {
+            if (!allowsOpponentWin(candidates[n2].q, candidates[n2].r, candidates[n2].i)) {
+              pick = candidates[n2];
+              break;
+            }
+          }
+        }
+        if (!pick && candidates.length) pick = candidates[0];
+      }
+
+      if (pick) doPlace(pick.q, pick.r, pick.i, 1);
       busy = false;
       current = 0;
       render(true);
@@ -484,6 +641,7 @@
   function renderTray() {
     const box = document.getElementById("next-tile");
     box.innerHTML = "";
+    if (winner !== null) return; // game over — no next piece
     const cells = clusterCells(0, 0, currentRot);
     const ctrs = cells.map(([q, r]) => center(q, r));
     const P = {
@@ -521,6 +679,14 @@
         status.textContent = (current === 0 ? "You to play (teal)" : "Friend to play (coral)");
       }
     }
+    if (winner !== null) {
+      let wname;
+      if (net) wname = winner === net.myIndex ? "You" : "Your friend";
+      else if (winner === 0) wname = "You";
+      else wname = withClaude ? "Claude" : "Friend";
+      status.textContent = (wname === "You" ? "You win" : wname + " wins")
+        + " — the untouched triangle!";
+    }
     document.getElementById("count-you").textContent = placedBy[0];
     document.getElementById("count-claude").textContent = placedBy[1];
     renderTray();
@@ -536,6 +702,8 @@
     currentRot = 0;
     hovered = null;
     armed = null;
+    winner = null;
+    winningPieceIdx = -1;
   }
 
   function newGarden() {
@@ -569,11 +737,19 @@
         updateStatus();
       } else if (msg.t === "sync") {
         resetState();
+        duel = !!msg.duel;
+        document.getElementById("duel-mode").checked = duel;
         for (const m of msg.moves) doPlace(m.q, m.r, m.i, m.player);
         current = msg.current;
         render(false);
         updateStatus();
       } else if (msg.t === "reset") {
+        resetState();
+        render(false);
+        updateStatus();
+      } else if (msg.t === "mode") {
+        duel = !!msg.duel;
+        document.getElementById("duel-mode").checked = duel;
         resetState();
         render(false);
         updateStatus();
@@ -587,7 +763,7 @@
     });
     // host catches a (re)joining friend up on the whole garden
     if (net.myIndex === 0) {
-      conn.send({ t: "sync", moves: moves, current: current });
+      conn.send({ t: "sync", moves: moves, current: current, duel: duel });
     }
     setInviteStatus("Connected! Close this and start growing.");
     setTimeout(hideInvite, 1200);
@@ -664,6 +840,13 @@
     updateStatus(); // keep the garden — just swap who plays coral
     if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
+  document.getElementById("duel-mode").addEventListener("change", function (e) {
+    duel = e.target.checked;
+    resetState();
+    if (net && net.conn) net.conn.send({ t: "mode", duel: duel });
+    render(false);
+    updateStatus();
+  });
   document.getElementById("play-online").addEventListener("click", startOnline);
   document.getElementById("invite-close").addEventListener("click", hideInvite);
   document.getElementById("copy-link").addEventListener("click", function () {
@@ -689,6 +872,9 @@
   window.HexafoilTest = {
     canPlace: canPlace,
     doPlace: doPlace,
+    clusterCells: clusterCells,
+    contactKeys: contactKeys,
+    winIfPlaced: winIfPlaced,
     state: function () {
       return {
         moves: moves.slice(),
@@ -696,14 +882,32 @@
         counts: placedBy.slice(),
         withClaude: withClaude,
         online: !!net,
+        duel: duel,
+        winner: winner,
+        winningPieceIdx: winningPieceIdx,
       };
     },
     play: function (q, r, i) {
+      if (winner !== null) return false;
       if (!canPlace(q, r, i)) return false;
       doPlace(q, r, i, current);
       if (net && net.conn) net.conn.send({ t: "move", q: q, r: r, i: i });
       current = 1 - current;
       render(true);
+      updateStatus();
+      return true;
+    },
+    // test-only: take back the last piece (clears any win state)
+    undo: function () {
+      const last = pieces.pop();
+      if (!last) return false;
+      moves.pop();
+      placedBy[last.player]--;
+      for (const [cq, cr] of last.cells) cellOwner.delete(key(cq, cr));
+      winner = null;
+      winningPieceIdx = -1;
+      current = last.player;
+      render(false);
       updateStatus();
       return true;
     },

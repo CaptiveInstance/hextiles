@@ -109,7 +109,7 @@
     gap: 14px;
     margin-top: 16px;
   }
-  #companion-label {
+  #companion-label, #duel-label {
     font-size: 13px;
     font-weight: 600;
     color: var(--ink);
@@ -119,7 +119,16 @@
     cursor: pointer;
     user-select: none;
   }
-  #companion-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+  #companion-label input, #duel-label input { accent-color: var(--gold); width: 16px; height: 16px; cursor: pointer; }
+
+  .win-tri {
+    animation: winPulse 1.4s ease-in-out infinite;
+    pointer-events: none;
+  }
+  @keyframes winPulse {
+    0%, 100% { stroke-opacity: 1; }
+    50%      { stroke-opacity: .3; }
+  }
   #new-game, #how-to-play, #play-online {
     padding: 9px 26px;
     font-size: 14px;
@@ -265,14 +274,18 @@
     <button id="how-to-play">How to play</button>
     <button id="play-online">Play online</button>
     <label id="companion-label"><input type="checkbox" id="with-claude" checked> Grow with Claude</label>
+    <label id="duel-label"><input type="checkbox" id="duel-mode"> Duel</label>
   </div>
 
   <p class="rules">
     A hexafoil is one piece of three hexagons. Take turns growing one shared
     pattern &mdash; every hexafoil must touch the garden, and no move may seal
-    off a gap too small to ever hold a hexafoil. No winners, no score. Toggle
-    &ldquo;Grow with Claude&rdquo; anytime to swap Claude and a pass-and-play
-    friend &mdash; your garden stays.
+    off a gap too small to ever hold a hexafoil. In the garden there are no
+    winners. In <strong>Duel</strong>, you win by placing the piece that
+    completes an <em>untouched triangle</em>: a hexafoil walled in on every
+    side whose drawn triangle touches no other triangle &mdash; corner to
+    corner or corner to edge-point, any contact breaks it. Toggle &ldquo;Grow
+    with Claude&rdquo; anytime to swap Claude and a pass-and-play friend.
   </p>
 
   <!-- ---- online invite panel ---- -->
@@ -325,7 +338,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20260615-1"></script>
+  <script src="garden.js?v=20261114-1"></script>
   <script>
   (function () {
     "use strict";
