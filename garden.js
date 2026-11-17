@@ -47,6 +47,8 @@
   let winningPieceIdx = -1; // index of the isolated piece that ended the game
   let boardR = 0;    // 0 = infinite garden; otherwise hex-board radius (2 -> 19 cells)
   let orphanRule = true; // forbid moves that strand cells too small for a piece
+  let piePending = false; // pie rule: coral is deciding whether to steal teal's opening
+  let pieUsed = false;    // the offer happens exactly once per game
 
   function inBoard(q, r) {
     if (!boardR) return true;
@@ -55,7 +57,7 @@
   }
 
   function isHumanTurn() {
-    if (busy || winner !== null) return false;
+    if (busy || winner !== null || piePending) return false;
     if (net) return !!net.conn && current === net.myIndex;
     return !withClaude || current === 0;
   }
@@ -545,6 +547,7 @@
     current = 1 - current;
     render(true);
     updateStatus();
+    if (maybePie()) return;
     if (!net && withClaude && current === 1) setTimeout(claudeMove, 800);
   }
 
@@ -592,10 +595,54 @@
     return cost;
   }
 
+  // ---- pie rule -----------------------------------------------------------
+  // On walled boards, moving first is a proven advantage, so after teal's
+  // opening coral may STEAL it: the piece changes color and teal moves again.
+  function maybePie() {
+    if (!boardR || moves.length !== 1 || pieUsed || winner !== null) return false;
+    pieUsed = true;
+    piePending = true;
+    if (net && net.myIndex === 0) { updateStatus(); return true; } // host waits for coral
+    if (!net && withClaude) {
+      // Claude holds the coral seat: steal central openings, decline wall-huggers
+      const p = pieces[0];
+      let cq = 0, cr = 0;
+      p.cells.forEach(c => { cq += c[0] / 3; cr += c[1] / 3; });
+      const d = Math.max(Math.abs(Math.round(cq)), Math.abs(Math.round(cr)), Math.abs(Math.round(-cq - cr)));
+      updateStatus();
+      setTimeout(function () { resolvePie(d <= 1); }, 900);
+      return true;
+    }
+    document.getElementById("pie").style.display = "flex"; // the human coral chooses
+    updateStatus();
+    return true;
+  }
+
+  function resolvePie(swap, fromRemote) {
+    if (!piePending) return;
+    piePending = false;
+    document.getElementById("pie").style.display = "none";
+    if (swap) {
+      const p = pieces[0];
+      p.player = 1;
+      p.fill = COLORS[1].fill;
+      p.edge = COLORS[1].edge;
+      moves[0].player = 1;
+      placedBy = [0, 1];
+      current = 0; // teal must open again, now second
+    } else {
+      current = 1; // coral plays on normally
+    }
+    if (!fromRemote && net && net.conn) net.conn.send({ t: "pie", swap: !!swap });
+    render(false);
+    updateStatus();
+    if (!net && withClaude && current === 1) setTimeout(claudeMove, 600);
+  }
+
   function claudeMove() {
     // stale or invalid wake-ups: online session, toggled to friend mode,
-    // already thinking, game already won, or no longer coral's turn
-    if (busy || net || !withClaude || current !== 1 || winner !== null) return;
+    // already thinking, game already won, pie decision pending, or not coral's turn
+    if (busy || net || !withClaude || current !== 1 || winner !== null || piePending) return;
     busy = true;
     updateStatus();
     setTimeout(function () {
@@ -703,6 +750,12 @@
         status.textContent = (current === 0 ? "You to play (teal)" : "Friend to play (coral)");
       }
     }
+    if (piePending && winner === null) {
+      const deciderIsMe = net ? net.myIndex === 1 : false;
+      status.textContent = deciderIsMe
+        ? "Pie rule — steal teal's opening, or play on?"
+        : "Pie rule — coral is deciding whether to steal the opening…";
+    }
     if (winner !== null) {
       let wname;
       if (net) wname = winner === net.myIndex ? "You" : "Your friend";
@@ -713,6 +766,19 @@
     }
     document.getElementById("count-you").textContent = placedBy[0];
     document.getElementById("count-claude").textContent = placedBy[1];
+    // live score on walled boards: pieces touching a same-color piece
+    const sb0 = document.getElementById("scorebit-0"), sb1 = document.getElementById("scorebit-1");
+    if (boardR) {
+      const sc = [0, 0];
+      for (const p of pieces) {
+        if (pieces.some(o => o !== p && o.player === p.player && o.contacts.some(x => p.contacts.indexOf(x) !== -1))) sc[p.player]++;
+      }
+      document.getElementById("score-you").textContent = sc[0];
+      document.getElementById("score-claude").textContent = sc[1];
+      sb0.style.display = sb1.style.display = "inline";
+    } else {
+      sb0.style.display = sb1.style.display = "none";
+    }
     renderTray();
   }
 
@@ -728,6 +794,10 @@
     armed = null;
     winner = null;
     winningPieceIdx = -1;
+    piePending = false;
+    pieUsed = false;
+    const pieEl = document.getElementById("pie");
+    if (pieEl) pieEl.style.display = "none";
   }
 
   function newGarden() {
@@ -759,6 +829,9 @@
         current = 1 - current;
         render(true);
         updateStatus();
+        maybePie();
+      } else if (msg.t === "pie") {
+        resolvePie(!!msg.swap, true);
       } else if (msg.t === "sync") {
         resetState();
         duel = !!msg.duel;
@@ -771,6 +844,7 @@
         current = msg.current;
         render(false);
         updateStatus();
+        if (moves.length === 1 && boardR) { pieUsed = false; maybePie(); } // joined mid-offer
       } else if (msg.t === "reset") {
         resetState();
         render(false);
@@ -880,6 +954,8 @@
     updateStatus(); // keep the garden — just swap who plays coral
     if (withClaude && current === 1) setTimeout(claudeMove, 400);
   });
+  document.getElementById("pie-steal").addEventListener("click", function () { resolvePie(true); });
+  document.getElementById("pie-pass").addEventListener("click", function () { resolvePie(false); });
   document.getElementById("orphan-rule").addEventListener("change", function (e) {
     orphanRule = e.target.checked;
     resetState();
@@ -944,15 +1020,18 @@
       };
     },
     play: function (q, r, i) {
-      if (winner !== null) return false;
+      if (winner !== null || piePending) return false;
       if (!canPlace(q, r, i)) return false;
       doPlace(q, r, i, current);
       if (net && net.conn) net.conn.send({ t: "move", q: q, r: r, i: i });
       current = 1 - current;
       render(true);
       updateStatus();
+      maybePie();
       return true;
     },
+    piePending: function () { return piePending; },
+    resolvePie: resolvePie,
     // test-only: take back the last piece (clears any win state)
     undo: function () {
       const last = pieces.pop();

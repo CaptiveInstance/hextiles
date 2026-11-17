@@ -161,7 +161,7 @@
   #new-game:hover, #how-to-play:hover, #play-online:hover { border-color: var(--gold); }
 
   /* ---- online invite panel ---- */
-  #invite {
+  #invite, #pie {
     position: fixed;
     inset: 0;
     background: rgba(74, 74, 68, .5);
@@ -276,8 +276,8 @@
   <div class="subtitle">grow a pattern together</div>
 
   <div class="counts">
-    <span><span id="who-0">You</span>: <strong id="count-you">0</strong> hexafoils (teal)</span>
-    <span><span id="who-1">Claude</span>: <strong id="count-claude">0</strong> hexafoils (coral)</span>
+    <span><span id="who-0">You</span>: <strong id="count-you">0</strong> hexafoils (teal)<span id="scorebit-0" style="display:none"> &middot; <strong id="score-you">0</strong> linked</span></span>
+    <span><span id="who-1">Claude</span>: <strong id="count-claude">0</strong> hexafoils (coral)<span id="scorebit-1" style="display:none"> &middot; <strong id="score-claude">0</strong> linked</span></span>
   </div>
 
   <div id="status"></div>
@@ -299,20 +299,42 @@
         <option value="0" selected>&infin;</option>
         <option value="2">19</option>
         <option value="3">37</option>
+        <option value="4">61</option>
       </select>
     </label>
   </div>
 
   <p class="rules">
-    A hexafoil is one piece of three hexagons. Take turns growing one shared
-    pattern &mdash; every hexafoil must touch the garden, and no move may seal
-    off a gap too small to ever hold a hexafoil. In the garden there are no
-    winners. In <strong>Duel</strong>, you win by placing the piece that
-    completes an <em>untouched triangle</em>: a hexafoil walled in on every
-    side whose drawn triangle touches no other triangle &mdash; corner to
-    corner or corner to edge-point, any contact breaks it. Toggle &ldquo;Grow
-    with Claude&rdquo; anytime to swap Claude and a pass-and-play friend.
+    A hexafoil is one piece of three hexagons, and every piece you place must
+    touch the pattern. On the endless board (&infin;) there's no score &mdash;
+    just grow a garden with Claude or a friend. On a <strong>walled
+    board</strong> (19, 37 or 61 cells) it's a match: when no more pieces fit,
+    you score a point for each piece of your color whose drawn triangle
+    touches another of your own &mdash; corner to corner or corner to
+    edge-point. Because moving first is an advantage, the <strong>pie
+    rule</strong> applies: after teal's opening, coral may steal that piece
+    for themselves, sending teal back to move again &mdash; so open modestly.
+    The optional <strong>orphan rule</strong> forbids sealing off gaps too
+    small to ever hold a piece (we usually play matches with it off), and
+    <strong>Duel</strong> is a different win condition: complete a walled-in
+    hexafoil whose triangle touches nothing, and you win on the spot.
   </p>
+
+  <!-- ---- pie rule dialog ---- -->
+  <div id="pie" style="display:none">
+    <div class="invite-card">
+      <h2>The pie rule</h2>
+      <p style="font-size:14.5px; line-height:1.5; color:var(--ink); margin:0 0 14px;">
+        Teal has made the opening move. Because going first is an advantage,
+        you may <strong>steal it</strong>: that piece becomes coral, and teal
+        has to move again. Or let them keep it and play on.
+      </p>
+      <div class="tut-nav">
+        <button id="pie-pass">Let them keep it</button>
+        <button id="pie-steal" style="background:var(--gold); border-color:var(--gold); color:#fff;">Steal it</button>
+      </div>
+    </div>
+  </div>
 
   <!-- ---- online invite panel ---- -->
   <div id="invite" style="display:none">
@@ -348,11 +370,20 @@
       </div>
       <div class="tut-slide" id="tut-slide-2" style="display:none">
         <div class="tut-art" id="tut-art-2"></div>
-        <h2>Growing together</h2>
-        <p>Every hexafoil must touch the garden, which grows outward forever.
-        There's no score and no winner. One rule of care: you can't make a move
-        that seals off a gap too small to ever hold a hexafoil &mdash; the game
-        simply won't allow it.</p>
+        <h2>Chains score</h2>
+        <p>On a walled board, it's a match: when nothing more fits, each piece
+        of your color whose white triangle <strong>touches another of your
+        own</strong> &mdash; corner to corner, or corner to edge-point &mdash;
+        scores a point. Linked pieces count; loners don't.</p>
+      </div>
+      <div class="tut-slide" id="tut-slide-3" style="display:none">
+        <div class="tut-art" id="tut-art-3"></div>
+        <h2>The pie rule</h2>
+        <p>Teal moves first, and that's worth something &mdash; so after
+        teal's opening, coral may <strong>steal it</strong>: the piece turns
+        coral, and teal must move again. Teal, open modestly; coral, steal
+        greedily. (On the endless &infin; board there's no match and no
+        stealing &mdash; just a garden.)</p>
       </div>
       <div class="tut-dots" id="tut-dots"></div>
       <div class="tut-nav">
@@ -364,11 +395,11 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20261115-2"></script>
+  <script src="garden.js?v=20261116-1"></script>
   <script>
   (function () {
     "use strict";
-    var SLIDES = 3, idx = 0;
+    var SLIDES = 4, idx = 0;
     var overlay = document.getElementById("tutorial");
     var dots = document.getElementById("tut-dots");
     for (var i = 0; i < SLIDES; i++) dots.appendChild(document.createElement("span"));
@@ -397,13 +428,13 @@
 
     // illustrations (drawn by the game's own art code)
     var A = [[0, 0], [1, 0], [1, -1]];           // one hexafoil
-    var B = [[0, 1], [0, 2], [1, 1]];            // touches A below
-    var C = [[2, 0], [3, -1], [2, -1]];          // touches A to the right
+    var C = [[2, 0], [3, -1], [2, -1]];          // touches A corner-to-corner
     window.HexafoilArt(document.getElementById("tut-art-0"), [{ cells: A, player: 0 }]);
     window.HexafoilArt(document.getElementById("tut-art-1"), [{ cells: A, player: 0, ghost: true }]);
     window.HexafoilArt(document.getElementById("tut-art-2"), [
-      { cells: A, player: 0 }, { cells: B, player: 1 }, { cells: C, player: 0 },
+      { cells: A, player: 0 }, { cells: C, player: 0 },
     ]);
+    window.HexafoilArt(document.getElementById("tut-art-3"), [{ cells: A, player: 1 }]);
 
     var seen = false;
     try { seen = !!localStorage.getItem("hexafoil-tutorial-seen"); } catch (e) {}
