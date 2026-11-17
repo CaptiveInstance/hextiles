@@ -161,7 +161,26 @@
   #new-game:hover, #how-to-play:hover, #play-online:hover { border-color: var(--gold); }
 
   /* ---- online invite panel ---- */
-  #invite, #pie {
+  /* pie rule: a banner at the top, NOT a modal — the player must be able to
+     see the opening they're judging */
+  #pie {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 10px;
+    z-index: 20;
+    background: none;
+    pointer-events: none;
+  }
+  #pie .invite-card {
+    pointer-events: auto;
+    padding: 14px 18px;
+    width: min(420px, 94vw);
+    box-shadow: 0 6px 30px rgba(0,0,0,.3);
+  }
+  #invite {
     position: fixed;
     inset: 0;
     background: rgba(74, 74, 68, .5);
@@ -396,7 +415,7 @@
 
   <script src="https://unpkg.com/peerjs@1.5.5/dist/peerjs.min.js"></script>
   <!-- bump ?v= on every deploy so browsers never serve a stale game -->
-  <script src="garden.js?v=20261116-2"></script>
+  <script src="garden.js?v=20261116-3"></script>
   <script>
   (function () {
     "use strict";
