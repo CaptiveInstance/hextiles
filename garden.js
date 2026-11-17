@@ -47,6 +47,7 @@
   let winningPieceIdx = -1; // index of the isolated piece that ended the game
   let boardR = 0;    // 0 = infinite garden; otherwise hex-board radius (2 -> 19 cells)
   let orphanRule = true; // forbid moves that strand cells too small for a piece
+  let mustTouch = true;  // placements must touch the existing pattern (off = free placement)
   let piePending = false; // pie rule: coral is deciding whether to steal teal's opening
   let pieUsed = false;    // the offer happens exactly once per game
 
@@ -95,7 +96,7 @@
       if (!inBoard(cq, cr)) return false;  // walls are walls
       if (!isEmpty(cq, cr)) return false;
     }
-    if (!touchesPattern(cells)) return false;
+    if (mustTouch && !touchesPattern(cells)) return false;
     // RULE (toggleable): no move may strand empty cells that could never
     // again hold a hexafoil. Applies to everyone when on.
     return !orphanRule || orphanCost(cells) === 0;
@@ -840,6 +841,8 @@
         document.getElementById("board-size").value = String(boardR);
         orphanRule = msg.orphan !== false;
         document.getElementById("orphan-rule").checked = orphanRule;
+        mustTouch = msg.touch !== false;
+        document.getElementById("must-touch").checked = mustTouch;
         for (const m of msg.moves) doPlace(m.q, m.r, m.i, m.player);
         current = msg.current;
         render(false);
@@ -864,6 +867,8 @@
       } else if (msg.t === "rules") {
         orphanRule = msg.orphan !== false;
         document.getElementById("orphan-rule").checked = orphanRule;
+        mustTouch = msg.touch !== false;
+        document.getElementById("must-touch").checked = mustTouch;
         resetState();
         render(false);
         updateStatus();
@@ -877,7 +882,7 @@
     });
     // host catches a (re)joining friend up on the whole garden
     if (net.myIndex === 0) {
-      conn.send({ t: "sync", moves: moves, current: current, duel: duel, board: boardR, orphan: orphanRule });
+      conn.send({ t: "sync", moves: moves, current: current, duel: duel, board: boardR, orphan: orphanRule, touch: mustTouch });
     }
     setInviteStatus("Connected! Close this and start growing.");
     setTimeout(hideInvite, 1200);
@@ -959,7 +964,14 @@
   document.getElementById("orphan-rule").addEventListener("change", function (e) {
     orphanRule = e.target.checked;
     resetState();
-    if (net && net.conn) net.conn.send({ t: "rules", orphan: orphanRule });
+    if (net && net.conn) net.conn.send({ t: "rules", orphan: orphanRule, touch: mustTouch });
+    render(false);
+    updateStatus();
+  });
+  document.getElementById("must-touch").addEventListener("change", function (e) {
+    mustTouch = e.target.checked;
+    resetState();
+    if (net && net.conn) net.conn.send({ t: "rules", orphan: orphanRule, touch: mustTouch });
     render(false);
     updateStatus();
   });
@@ -1015,6 +1027,7 @@
         duel: duel,
         board: boardR,
         orphanRule: orphanRule,
+        mustTouch: mustTouch,
         winner: winner,
         winningPieceIdx: winningPieceIdx,
       };
